@@ -1,10 +1,14 @@
 import { Request, Response } from "express";
 import * as restaurantsService from "../services/restaurants.service";
 import { AuthenticatedRequest } from "../middlewares/auth";
+import { logError, logInfo, logWarn } from "../utils/logger";
 
 export const create = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    console.log("[create]▶️ Creating a new restaurant:", req.body);
+    logInfo("restaurant.create.start", {
+      name: req.body?.name,
+      userId: req.user?.id,
+    });
 
     const { name, address, location } = req.body;
     const image = req.file?.filename;
@@ -17,29 +21,29 @@ export const create = async (req: AuthenticatedRequest, res: Response) => {
       req.user.id
     );
 
-    console.log("✅ Created restaurant with ID:", restaurant._id);
+    logInfo("restaurant.create.success", { id: restaurant._id });
     res.json(restaurant);
   } catch (err) {
-    console.error("Error creating restaurant:", err);
+    logError("restaurant.create.error", { body: req.body }, err as Error);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 export const list = async (_req: Request, res: Response) => {
   try {
-    console.log("[list]▶️ Fetching all restaurants");
+    logInfo("restaurant.list.start");
     const restaurants = await restaurantsService.getAllRestaurants();
-    console.log(`Found ${restaurants.length} restaurants`);
+    logInfo("restaurant.list.success", { count: restaurants.length });
     res.json(restaurants);
   } catch (err) {
-    console.error("Error listing restaurants:", err);
+    logError("restaurant.list.error", undefined, err as Error);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 export const update = async (req: Request, res: Response) => {
   try {
-    console.log("[update]▶️ Updating restaurant ID:", req.params.id);
+    logInfo("restaurant.update.start", { id: req.params.id });
 
     const updateData: any = { ...req.body };
 
@@ -56,21 +60,21 @@ export const update = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Restaurant not found" });
     }
 
-    console.log("✅ Updated restaurant:", updated._id);
+    logInfo("restaurant.update.success", { id: updated._id });
     res.json(updated);
   } catch (err) {
-    console.error("Error updating restaurant:", err);
+    logError("restaurant.update.error", { id: req.params.id }, err as Error);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 export const getOne = async (req: Request, res: Response) => {
-  console.log("[getOne] ▶️ Fetching restaurant with ID:", req.params.id);
+  logInfo("restaurant.getOne.start", { id: req.params.id });
   const restaurant = await restaurantsService.getRestaurantById(req.params.id);
   if (!restaurant) {
-    console.warn("Restaurant not found:", req.params.id);
+    logWarn("restaurant.getOne.notFound", { id: req.params.id });
   } else {
-    console.log("Restaurant found:", restaurant.name);
+    logInfo("restaurant.getOne.found", { id: restaurant._id, name: restaurant.name });
   }
   res.json(restaurant);
 };
@@ -78,29 +82,28 @@ export const getOne = async (req: Request, res: Response) => {
 export const getByUser = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    console.log("[getByUser] ▶️ Fetching restaurants for user ID:", req.user.id);
+    logInfo("[getByUser] Fetching restaurants for user", { userId: req.user.id });
     const restaurants = await restaurantsService.getRestaurantByUserId(req.user.id);
-    console.log(restaurants);
-    console.log(`restaurants: ${JSON.stringify(restaurants)}`);
+    logInfo("restaurants.byUser.success", { count: restaurants.length, userId: req.user.id });
     
     res.json(restaurants);
   } catch (err) {
-    console.error("Error fetching user restaurants:", err);
+    logError("restaurants.byUser.error", { userId: req.user?.id }, err as Error);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 
 export const toggleAvailability = async (req: Request, res: Response) => {
-  console.log("[toggleAvailability]▶️ Toggling availability for restaurant ID:", req.params.id);
+  logInfo("restaurant.toggle.start", { id: req.params.id });
   const updated = await restaurantsService.toggleAvailability(req.params.id);
-  console.log("Updated availability to:", updated?.available);
+  logInfo("restaurant.toggle.success", { id: req.params.id, available: updated?.available });
   res.json(updated);
 };
 
 export const remove = async (req: Request, res: Response) => {
   try {
-    console.log("[deleteRestaurant] ▶️ Deleting restaurant ID:", req.params.id);
+    logInfo("restaurant.delete.start", { id: req.params.id });
 
     const deleted = await restaurantsService.deleteRestaurant(req.params.id);
 
@@ -108,22 +111,21 @@ export const remove = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Restaurant not found" });
     }
 
-    console.log("✅ Deleted restaurant");
+    logInfo("restaurant.delete.success", { id: req.params.id });
     res.status(204).send(); // No content
   } catch (err) {
-    console.error("Error deleting restaurant:", err);
+    logError("restaurant.delete.error", { id: req.params.id }, err as Error);
     res.status(500).json({ message: "Something went wrong" });
   }
 };
 
 
 export const addMenuItem = async (req: AuthenticatedRequest, res: Response) => {
-  console.log(
-    "[addMenuItem]▶️ Adding menu item for restaurant ID:",
-    req.params.id,
-    "Item:",
-    req.body
-  );
+  logInfo("menuItem.add.start", {
+    restaurantId: req.params.id,
+    userId: req.user?.id,
+    name: req.body?.name,
+  });
 
   const { name, description, price, category } = req.body;
   const image = req.file?.filename; // For image upload
@@ -138,28 +140,28 @@ export const addMenuItem = async (req: AuthenticatedRequest, res: Response) => {
     { name, description, price, category, image, userId: req.user.id, } // item data with userId
   );
 
-  console.log("✅ Added menu item with ID:", item._id);
+  logInfo("menuItem.add.success", { id: item._id, restaurantId: req.params.id });
   res.json(item);
 };
 
 export const listMenuItems = async (req: Request, res: Response) => {
-  console.log("[listMenuItems]▶️ Fetching menu items for restaurant ID:", req.params.id);
+  logInfo("menuItem.list.start", { restaurantId: req.params.id });
   const items = await restaurantsService.listMenuItems(req.params.id);
-  console.log(`Found ${items.length} menu items`);
+  logInfo("menuItem.list.success", { restaurantId: req.params.id, count: items.length });
   res.json(items);
 };
 
 export const getOneMenuItem = async (req: Request, res: Response) => {
-    console.log("[getOneMenuItem]▶️ Fetching menu item with ID:", req.params.itemId);
+    logInfo("menuItem.getOne.start", { itemId: req.params.itemId });
   
     const item = await restaurantsService.getOneMenuItem(req.params.itemId);
   
     if (!item) {
-      console.warn("❌ Menu item not found:", req.params.itemId);
+      logWarn("menuItem.getOne.notFound", { itemId: req.params.itemId });
       return res.status(404).json({ message: "Menu item not found" });
     }
   
-    console.log("✅ Menu item found:", item.name);
+    logInfo("menuItem.getOne.found", { itemId: item._id, name: item.name });
     res.json(item);
   };
   
@@ -167,13 +169,13 @@ export const getMenuItemsByUser = async (req: AuthenticatedRequest, res: Respons
     try {
       if (!req.user) return res.status(401).json({ message: "Unauthorized" });
   
-      console.log("[getMenuItemsByUser]▶️ Fetching menu items for user ID:", req.user.id);
+      logInfo("menuItem.byUser.start", { userId: req.user.id });
       const items = await restaurantsService.getMenuItemsByUser(req.user.id);
   
-      console.log(`✅ Found ${items.length} menu items for user`);
+      logInfo("menuItem.byUser.success", { userId: req.user.id, count: items.length });
       res.json(items);
     } catch (err) {
-      console.error("Error fetching menu items by user:", err);
+      logError("menuItem.byUser.error", { userId: req.user?.id }, err as Error);
       res.status(500).json({ message: "Something went wrong" });
     }
 };
@@ -181,7 +183,7 @@ export const getMenuItemsByUser = async (req: AuthenticatedRequest, res: Respons
   
 export const updateMenuItem = async (req: Request, res: Response) => {
     try {
-      console.log("[updateMenuItem]▶️ Updating menu item ID:", req.params.itemId);
+      logInfo("menuItem.update.start", { itemId: req.params.itemId });
   
       const updateData: any = { ...req.body };
   
@@ -198,17 +200,17 @@ export const updateMenuItem = async (req: Request, res: Response) => {
         return res.status(404).json({ message: "Menu item not found" });
       }
   
-      console.log("✅ Updated menu item:", updatedItem._id);
+      logInfo("menuItem.update.success", { itemId: updatedItem._id });
       res.json(updatedItem);
     } catch (err) {
-      console.error("Error updating menu item:", err);
+      logError("menuItem.update.error", { itemId: req.params.itemId }, err as Error);
       res.status(500).json({ message: "Something went wrong" });
     }
   };
   
 export const deleteMenuItem = async (req: Request, res: Response) => {
   try {
-    console.log("[deleteMenuItem] ▶️ Deleting menu item ID:", req.params.itemId);
+    logInfo("menuItem.delete.start", { itemId: req.params.itemId });
 
     const deleted = await restaurantsService.deleteMenuItem(req.params.itemId);
 
@@ -216,10 +218,10 @@ export const deleteMenuItem = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Menu item not found" });
     }
 
-    console.log("✅ Deleted menu item");
+    logInfo("menuItem.delete.success", { itemId: req.params.itemId });
     res.status(204).send(); // No content
   } catch (err) {
-    console.error("Error deleting menu item:", err);
+    logError("menuItem.delete.error", { itemId: req.params.itemId }, err as Error);
     res.status(500).json({ message: "Something went wrong" });
   }
 };

@@ -1,6 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { logInfo } from '../utils/logger';
 
 // Absolute path to the 'uploads' folder (safely resolves relative to root)
 const uploadDir = path.join(__dirname, '../../uploads');
@@ -12,13 +13,13 @@ if (!fs.existsSync(uploadDir)) {
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        console.log('📂 Uploading to:', uploadDir);
+        logInfo('upload.destination', { uploadDir });
         cb(null, uploadDir); // Set upload folder
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         const fileName = uniqueSuffix + path.extname(file.originalname);
-        console.log('📸 Filename:', fileName); 
+        logInfo('upload.filename.generated', { fileName });
         cb(null, fileName);
     },
 });

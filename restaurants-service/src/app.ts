@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors'; 
 import restaurantsRoutes from './routes/restaurants.routes';
 import path from 'path';
+import { requestLogger } from './middlewares/requestLogger';
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.use(cors({
   }));
 
 app.use(express.json());
+app.use(requestLogger);
 
 app.use('/api/restaurants', restaurantsRoutes);
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
