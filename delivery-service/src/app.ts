@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import deliveryRoutes from "./routes/delivery.routes";
 import driverRoutes from "./routes/driver.routes";
+import { requestLogger } from "./middleware/requestLogger";
 
 dotenv.config();
 const app = express();
@@ -19,6 +20,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use(requestLogger);
 
 app.use("/api/drivers", driverRoutes);
 app.use("/api/delivery", deliveryRoutes);

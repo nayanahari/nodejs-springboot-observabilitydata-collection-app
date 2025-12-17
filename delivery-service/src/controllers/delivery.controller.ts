@@ -16,6 +16,7 @@ import { Driver } from "../models/driver.model";
 import axios from "axios";
 import { Delivery } from "../models/delivery.model";
 import { sendSMS } from "../services/sms.service";
+import { logError, logInfo, logWarn } from "../utils/logger";
 
 const ORDER_SERVICE_BASE_URL = "http://localhost:3002/api/orders";
 const USER_SERVICE_BASE_URL = "http://localhost:3003/api/auth";
@@ -25,14 +26,12 @@ export const assignDriverAutomatically = async (
   res: Response
 ) => {
   const { orderId, customerId, restaurantId } = req.body;
-  console.log(
-    "Received orderId:",
+  logInfo("delivery.assign.auto.start", {
     orderId,
-    "customerId:",
     customerId,
-    "restaurantId:",
-    restaurantId
-  );
+    restaurantId,
+    requestId: req.requestId,
+  });
   try {
     const restaurantRes = await axios.get(
       `http://localhost:3001/api/restaurants/${restaurantId}`
@@ -65,8 +64,14 @@ export const assignDriverAutomatically = async (
 
     await markDriverAvailability(driver._id.toString(), false);
 
+    logInfo("delivery.assign.auto.success", {
+      orderId,
+      deliveryId: delivery._id,
+      driverId: driver._id.toString(),
+    });
     res.status(200).json({ message: "Driver assigned", delivery });
   } catch (error: any) {
+    logError("delivery.assign.auto.error", { orderId, customerId, restaurantId }, error);
     res
       .status(500)
       .json({ message: "Error assigning driver", error: error.message });
@@ -84,7 +89,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
     await updateDeliveryAcceptance(delivery, action);
 
     if (action === "decline") {
-      console.log("Driver declined, attempting to reassign...");
+      logInfo("delivery.assign.declined", { orderId });
 
       try {
         const orderRes = await axios.get(
@@ -98,7 +103,10 @@ export const respondToAssignment = async (req: Request, res: Response) => {
         );
 
         if (newDriver) {
-          console.log("✅ Found another driver:", newDriver._id);
+          logInfo("delivery.assign.reassign.found", {
+            orderId,
+            newDriverId: newDriver._id.toString(),
+          });
 
           // Assign delivery to new driver
           delivery.driverId = newDriver._id.toString();
@@ -113,7 +121,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
             delivery,
           });
         } else {
-          console.log("❌ No available driver to reassign.");
+          logWarn("delivery.assign.reassign.none", { orderId });
           // Delivery remains pending without a driver
           delivery.driverId = undefined;
           delivery.acceptStatus = "Pending";
@@ -126,7 +134,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
           });
         }
       } catch (error) {
-        console.error("Error during reassignment:", error);
+        logError("delivery.assign.reassign.error", { orderId }, error as Error);
         return res.status(500).json({
           message: "Error reassigning delivery",
           error: (error as Error).message,
@@ -139,7 +147,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
       .status(200)
       .json({ message: `Assignment ${action}ed`, delivery });
   } catch (error: any) {
-    console.error(error);
+    logError("delivery.assign.respond.error", { orderId, action }, error);
     res.status(500).json({
       message: "Error responding to assignment",
       error: error.message,
@@ -149,7 +157,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
 export const getAssignedOrders = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    console.log("Token User ID:", userId);
+    logInfo("delivery.assigned.list.start", { userId });
 
     // 1️⃣ Find Driver by userId
     const driver = await Driver.findOne({ userId });
@@ -157,7 +165,7 @@ export const getAssignedOrders = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Driver not found" });
     }
 
-    console.log("Driver _id:", driver._id);
+    logInfo("delivery.assigned.driver.found", { userId, driverId: driver._id.toString() });
 
     // 2️⃣ Find assigned deliveries
     const deliveries = await findAssignedDeliveriesForDriver(
@@ -182,10 +190,10 @@ export const getAssignedOrders = async (req: Request, res: Response) => {
             specialInstructions: order.specialInstructions || "",
           };
         } catch (err) {
-          console.error(
-            `Failed fetching order ${delivery.orderId}:`,
-            (err as Error).message
-          );
+          logWarn("delivery.assigned.order.fetchFailed", {
+            orderId: delivery.orderId,
+            error: (err as Error).message,
+          });
           return {
             ...delivery.toObject(),
             deliveryAddress: null,
@@ -196,7 +204,7 @@ export const getAssignedOrders = async (req: Request, res: Response) => {
 
     res.status(200).json(enhancedDeliveries);
   } catch (error: any) {
-    console.error(error);
+    logError("delivery.assigned.list.error", { userId: (req as any).user?.id }, error);
     res.status(500).json({
       message: "Error fetching assigned deliveries",
       error: error.message,
@@ -269,19 +277,19 @@ export const updateDeliveryStatus = async (req: Request, res: Response) => {
     // Step 2: If the status is "Delivered", send an email to the customer
     if (status === "Delivered") {
       // Fetch the order details to get the userId
-      console.log("Fetching order details...");
+      logInfo("delivery.status.fetchOrder.start", { orderId: updatedDelivery.orderId });
       const orderRes = await axios.get(
         `${ORDER_SERVICE_BASE_URL}/${updatedDelivery.orderId}`
       );
       const order = orderRes.data;
-      console.log("Order fetched:", order);
+      logInfo("delivery.status.fetchOrder.success", { orderId: updatedDelivery.orderId });
 
       // Fetch the customer details from the user service using userId
       const userRes = await axios.get(
         `${USER_SERVICE_BASE_URL}/${order.userId}`
       );
       const user = userRes.data;
-      console.log("User fetched:", user);
+      logInfo("delivery.status.fetchUser.success", { userId: user._id });
 
       // Email details
       // const customerEmail = 'lavinduyomith2016@gmail.com';
@@ -305,12 +313,12 @@ export const updateDeliveryStatus = async (req: Request, res: Response) => {
 
       // Send the email to the customer
       if (customerEmail) {
-        console.log("Sending email...");
+        logInfo("delivery.status.notify.email", { to: customerEmail, orderId: updatedDelivery.orderId });
         await sendEmail(customerEmail, subject, text);
       }
       // Send SMS if the phone number exists
       if (customerPhone) {
-        console.log("Sending SMS...");
+        logInfo("delivery.status.notify.sms", { to: customerPhone, orderId: updatedDelivery.orderId });
         await sendSMS(customerPhone, message);
       }
     }
@@ -320,7 +328,7 @@ export const updateDeliveryStatus = async (req: Request, res: Response) => {
       updatedDelivery,
     });
   } catch (error: any) {
-    console.error(error);
+    logError("delivery.status.error", { deliveryId: req.params.deliveryId, status }, error);
     res.status(500).json({
       message: "Error updating delivery status",
       error: error.message,

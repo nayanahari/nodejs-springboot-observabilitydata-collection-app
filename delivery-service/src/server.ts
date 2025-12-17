@@ -5,6 +5,7 @@ import http from 'http';
 import app from './app';
 import connectDB from './config/db';
 import { Server } from 'socket.io';
+import { logError, logInfo } from './utils/logger';
 
 const PORT = process.env.PORT || 3000;
 
@@ -21,12 +22,12 @@ app.set('io', io);
 
 // Socket.IO handling
 io.on('connection', (socket) => {
-  console.log('📡 New client connected:', socket.id);
+  logInfo('socket.connected', { socketId: socket.id });
 
   // Join delivery tracking room
   socket.on('join-delivery-room', (deliveryId: string) => {
     socket.join(`delivery-${deliveryId}`);
-    console.log(`✅ Client joined room delivery-${deliveryId}`);
+    logInfo('socket.joined.room', { socketId: socket.id, room: `delivery-${deliveryId}` });
   });
 
   // Receive location from driver and broadcast
@@ -35,13 +36,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.id);
+    logInfo('socket.disconnected', { socketId: socket.id });
   });
 });
 
 // Start server after DB is ready
 connectDB().then(() => {
   server.listen(PORT, () => {
-    console.log(`🚀 Delivery service running on port ${PORT}`);
+    logInfo('server.started', { port: PORT });
   });
+}).catch((error) => {
+  logError('server.start.failure', { port: PORT }, error as Error);
+  process.exit(1);
 });

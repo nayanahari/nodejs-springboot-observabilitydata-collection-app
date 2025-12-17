@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { logError, logInfo } from '../utils/logger';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -16,16 +17,14 @@ const transporter = nodemailer.createTransport({
 
 export const sendEmail = async (to: string, subject: string, text: string) => {
   try {
-    console.log('email:',process.env.EMAIL_USER);
-    console.log('pass:',process.env.EMAIL_PASS);
     const info = await transporter.sendMail({
       from: `"HungerJet" <${process.env.EMAIL_USER}>`,  // Sender email from environment variable
       to,  // Recipient email (parameter)
       subject,  // Email subject (parameter)
       text,  // Email body (parameter)
     });
-    console.log('Email sent: ', info.messageId);  // Log the message ID of the sent email
+    logInfo('email.sent', { messageId: info.messageId, to });
   } catch (error) {
-    console.error('Error sending email: ', error);  // Log any errors if the email couldn't be sent
+    logError('email.send.error', { to, subject }, error as Error);
   }
 };
